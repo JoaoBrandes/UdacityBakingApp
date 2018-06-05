@@ -1,6 +1,5 @@
 package com.luiz.joao.udacitybakingapp.utils;
 
-import android.net.Uri;
 import android.util.Log;
 
 import java.io.IOException;
@@ -10,9 +9,11 @@ import java.net.URL;
 import java.util.List;
 import java.util.Scanner;
 
-public class NetworkUtils {
+public final class NetworkUtils {
     private static final String TAG = NetworkUtils.class.getSimpleName();
     private static final String UrlBase = "https://d17h27t6h515a5.cloudfront.net/topher/2017/May/59121517_baking/baking.json";
+
+    private NetworkUtils () {}
 
     public static List<Recipe> getRecipesList() {
         List<Recipe> jsonAllRecipes = null;

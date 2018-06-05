@@ -1,6 +1,8 @@
 package com.luiz.joao.udacitybakingapp;
 
-import android.app.Fragment;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
+import android.support.v4.app.Fragment;
 import android.content.Intent;
 import android.media.session.MediaSession;
 import android.media.session.PlaybackState;
@@ -40,12 +42,21 @@ public class StepActivityFragment extends Fragment implements ExoPlayer.EventLis
     private static MediaSession mMediaSession;
     private SimpleExoPlayer mExoPlayer;
     private ArrayList<Step> stepList;
+    private Step step;
     private int position;
 
     private SimpleExoPlayerView mPlayerView;
     private PlaybackState.Builder mStateBuilder;
 
+    private Long playerPosition = 0L;
+    private Boolean playWhenReady = true;
+
     public StepActivityFragment() {
+    }
+
+    public void setArguments(Step step, int position) {
+        this.step = step;
+        this.position = position;
     }
 
     @Override
@@ -54,25 +65,37 @@ public class StepActivityFragment extends Fragment implements ExoPlayer.EventLis
 
         Intent intentDetailItem = getActivity().getIntent();
 
+        if (savedInstanceState != null) {
+            playerPosition = savedInstanceState.getLong("playerPosition");
+            playWhenReady = savedInstanceState.getBoolean("playWhenReady");
+        }
+
         // Initialize the player view.
         View rootView = inflater.inflate(R.layout.number_list_step_detail, container, false);
-        if (intentDetailItem != null) {
-            mPlayerView = rootView.findViewById(R.id.playerView);
-
+        if (intentDetailItem != null && intentDetailItem.hasExtra("position")) {
             position = intentDetailItem.getExtras().getInt("position");
             stepList = intentDetailItem.getExtras().getParcelableArrayList("step");
-            Step step = stepList.get(position);
+            step = stepList.get(position);
+        }
 
-            if (step.getVideoUrl().isEmpty() || step.getVideoUrl().length() == 0) {
-                mPlayerView.setVisibility(View.GONE);
-            } else {
-                initializeMediaSession();
-                initializePlayer(Uri.parse(step.getVideoUrl()));
-            }
+        mPlayerView = rootView.findViewById(R.id.playerView);
+        if (step == null) {
+            return rootView;
+        }
+        if (step.getVideoUrl().isEmpty() || step.getVideoUrl().length() == 0) {
+            mPlayerView.setVisibility(View.GONE);
+        } else {
+            mPlayerView.setVisibility(View.VISIBLE);
+            initializeMediaSession();
+            initializePlayer(Uri.parse(step.getVideoUrl()));
+        }
 
-            TextView description = rootView.findViewById(R.id.step_description);
-            description.setText(step.getDescription());
+        TextView description = rootView.findViewById(R.id.step_description);
+        description.setText(step.getDescription());
 
+        if (stepList == null) {
+            rootView.findViewById(R.id.buttons_grid).setVisibility(View.GONE);
+        } else {
             Button nextButton = rootView.findViewById(R.id.button_next);
 
             if (position == stepList.size() - 1) {
@@ -99,7 +122,6 @@ public class StepActivityFragment extends Fragment implements ExoPlayer.EventLis
             }
         }
         return rootView;
-
     }
 
     private void initializeMediaSession() {
@@ -128,6 +150,13 @@ public class StepActivityFragment extends Fragment implements ExoPlayer.EventLis
         mMediaSession.setActive(true);
     }
 
+    @Override
+    public void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putLong("playerPosition", playerPosition);
+        outState.putBoolean("playWhenReady", playWhenReady);
+    }
+
     private void initializePlayer(Uri mediaUri) {
         if (mExoPlayer == null) {
             // Create an instance of the ExoPlayer.
@@ -144,7 +173,8 @@ public class StepActivityFragment extends Fragment implements ExoPlayer.EventLis
             MediaSource mediaSource = new ExtractorMediaSource(mediaUri, new DefaultDataSourceFactory(
                     getContext(), userAgent), new DefaultExtractorsFactory(), null, null);
             mExoPlayer.prepare(mediaSource);
-            mExoPlayer.setPlayWhenReady(true);
+            mExoPlayer.seekTo(playerPosition);
+            mExoPlayer.setPlayWhenReady(playWhenReady);
         }
     }
 
@@ -201,12 +231,43 @@ public class StepActivityFragment extends Fragment implements ExoPlayer.EventLis
         mMediaSession.setActive(false);
     }
 
+    @Override
+    public void onResume() {
+        super.onResume();
+        initializeMediaSession();
+        initializePlayer(Uri.parse(step.getVideoUrl()));
+    }
+
+    @Override
+    public void onActivityCreated(@Nullable Bundle savedInstanceState) {
+        super.onActivityCreated(savedInstanceState);
+        if (savedInstanceState != null && savedInstanceState.containsKey("playerPosition")) {
+            playerPosition = savedInstanceState.getLong("playerPosition");
+        }
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        releasePlayer();
+        mMediaSession.setActive(false);
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+        releasePlayer();
+        mMediaSession.setActive(false);
+    }
+
     /**
      * Release the player when the activity is destroyed.
      */
     private void releasePlayer() {
         if (mExoPlayer != null) {
             mExoPlayer.stop();
+            playerPosition = mExoPlayer.getCurrentPosition();
+            playWhenReady = mExoPlayer.getPlayWhenReady();
             mExoPlayer.release();
             mExoPlayer = null;
         }
